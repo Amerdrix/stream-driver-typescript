@@ -1,0 +1,21 @@
+{
+  "name": "stream-driver-ts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "gulp": "^3.9.1",
+    "gulp-mocha": "^2.2.0",
+    "gulp-typescript": "^2.13.0",
+    "immutable": "^3.8.0",
+    "mocha": "^2.4.5",
+    "rx": "^4.1.0",
+    "typings": "^0.7.12"
+  }
+}
