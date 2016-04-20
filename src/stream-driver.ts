@@ -32,10 +32,8 @@ export function createIntent<T>(name: string){
   return intent;
 }
 
-export class CompositeDriver implements IDriver{
+class _CompositeDriver implements IDriver{
   apply(state: State, intent: Intent){
-
-
     state = this.beforeApply(state, intent);
 
     const drivers = this.getDrivers(state)
@@ -73,28 +71,51 @@ class IDriverMap {
   driver: IDriver
 }
 
-class RootDriver extends CompositeDriver {
+class AttachDriverData {
+  path: string
+  driver: IDriver
+}
+
+class RootDriver extends _CompositeDriver {
 
   beforeApply(state: State, intent: Intent){
-    console.log(`intent: ${intent.name}`)
-
     switch(intent.key){
       case attachDriver:
-        var drivers = this.getDrivers(state).push({key: intent.data.key, driver: intent.data.driver})
-        return this.setDrivers(state, drivers)
+
+        var data = <AttachDriverData>intent.data
+        var path = data.path.split('.')
+        var parentState = state.getIn(path.slice(0, -1))
+        var driver = parentState.get('__driver')
+
+        console.log(path, parentState)
+
+        if(driver instanceof _CompositeDriver){
+          var key = path[path.length - 1]
+
+
+          var updatedDriverList = driver.getDrivers(parentState).push({key: key, driver: data.driver})
+          var updatedState = driver.setDrivers(parentState, updatedDriverList).setIn([key,'__driver'], driver);
+
+          return updatedState;
+        }
+
+        throw `${path.slice[0,-1]} is not a composite driver`
+
       case __resetState__:
-        return Immutable.Map<string, any>();
+        return INITIAL_STATE
       default:
         return state;
     }
   }
 }
 
-export const attachDriver = createIntent<IDriverMap>('ATTACH DRIVER')
+
+export const attachDriver = createIntent<AttachDriverData>('ATTACH DRIVER')
 export const  __resetState__ = createIntent('RESET STATE')
 
+export const CompositeDriver = new _CompositeDriver()
 const ROOT_DRIVER = new RootDriver()
-const INITIAL_STATE = Immutable.Map<string, any>()
+const INITIAL_STATE = Immutable.Map<string, any>({'__driver': ROOT_DRIVER})
 const intent$ = new Rx.Subject<Intent>()
-const state$ = intent$.scan((s, i) => ROOT_DRIVER.apply(s,i),  INITIAL_STATE).replay(1)
+export const state$ = intent$.scan((s, i) => ROOT_DRIVER.apply(s,i),  INITIAL_STATE).replay(1)
 state$.connect()
