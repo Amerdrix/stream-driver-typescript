@@ -50,14 +50,11 @@ describe("Attach", function () {
     it("can nest to multiple levels composite drivers", function () {
         var driverApplyCalled = false;
         var testDriver = new TestDriver(function (s) { driverApplyCalled = true; return s; });
-        try {
-            StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.CompositeDriver });
-            StreamDriver.attachDriver({ path: "Parent.child", driver: StreamDriver.CompositeDriver });
-            StreamDriver.attachDriver({ path: "Parent.child.tests", driver: testDriver });
-        }
-        catch (e) {
-            console.log("errro" + e);
-        }
+
+        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.CompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent.child", driver: StreamDriver.CompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent.child.tests", driver: testDriver });
+    
         testIntent();
         chai_1.expect(driverApplyCalled).to.be.true;
     });
