@@ -36,7 +36,7 @@ class _CompositeDriver implements IDriver{
   apply(state: State, intent: Intent){
     state = this.beforeApply(state, intent);
 
-    const drivers = this.getDrivers(state)
+    const drivers = this.getChildDrivers(state)
 
     state = drivers.reduce((state, driver) => {
       var innerState = state.get(driver.key)
@@ -56,7 +56,7 @@ class _CompositeDriver implements IDriver{
     return state;
   }
 
-  protected getDrivers(state: State) {
+  protected getChildDrivers(state: State) {
     return <Immutable.List<IDriverMap>>state.get('__drivers')
                         || Immutable.List<IDriverMap>();
   }
@@ -82,24 +82,23 @@ class RootDriver extends _CompositeDriver {
     switch(intent.key){
       case attachDriver:
 
-        var data = <AttachDriverData>intent.data
-        var path = data.path.split('.')
-        var parentState = state.getIn(path.slice(0, -1))
-        var driver = parentState.get('__driver')
+        const data = <AttachDriverData>intent.data
+        const fullPath = data.path.split('.')
+        const path = fullPath.slice(0, -1)
+        const key = fullPath[fullPath.length - 1]
 
-        console.log(path, parentState)
+
+        const driverState = state.getIn(path)
+        const driver = driverState.get('__driver')
 
         if(driver instanceof _CompositeDriver){
-          var key = path[path.length - 1]
+          const updatedDriverList = driver.getChildDrivers(driverState).push({key: key, driver: data.driver})
 
-
-          var updatedDriverList = driver.getDrivers(parentState).push({key: key, driver: data.driver})
-          var updatedState = driver.setDrivers(parentState, updatedDriverList).setIn([key,'__driver'], driver);
-
-          return updatedState;
+          const updatedDriverState = driver.setDrivers(driverState, updatedDriverList).setIn([key,'__driver'], driver);
+          return state.setIn(path, updatedDriverState)
         }
 
-        throw `${path.slice[0,-1]} is not a composite driver`
+        throw `${path} is not a composite driver`
 
       case __resetState__:
         return INITIAL_STATE

@@ -28,7 +28,7 @@ var _CompositeDriver = (function () {
     }
     _CompositeDriver.prototype.apply = function (state, intent) {
         state = this.beforeApply(state, intent);
-        var drivers = this.getDrivers(state);
+        var drivers = this.getChildDrivers(state);
         state = drivers.reduce(function (state, driver) {
             var innerState = state.get(driver.key);
             var newState = driver.driver.apply(innerState, intent) || innerState;
@@ -42,7 +42,7 @@ var _CompositeDriver = (function () {
     _CompositeDriver.prototype.afterApply = function (state, intent) {
         return state;
     };
-    _CompositeDriver.prototype.getDrivers = function (state) {
+    _CompositeDriver.prototype.getChildDrivers = function (state) {
         return state.get('__drivers')
             || Immutable.List();
     };
@@ -70,17 +70,17 @@ var RootDriver = (function (_super) {
         switch (intent.key) {
             case exports.attachDriver:
                 var data = intent.data;
-                var path = data.path.split('.');
-                var parentState = state.getIn(path.slice(0, -1));
-                var driver = parentState.get('__driver');
-                console.log(path, parentState);
+                var fullPath = data.path.split('.');
+                var path = fullPath.slice(0, -1);
+                var key = fullPath[fullPath.length - 1];
+                var driverState = state.getIn(path);
+                var driver = driverState.get('__driver');
                 if (driver instanceof _CompositeDriver) {
-                    var key = path[path.length - 1];
-                    var updatedDriverList = driver.getDrivers(parentState).push({ key: key, driver: data.driver });
-                    var updatedState = driver.setDrivers(parentState, updatedDriverList).setIn([key, '__driver'], driver);
-                    return updatedState;
+                    var updatedDriverList = driver.getChildDrivers(driverState).push({ key: key, driver: data.driver });
+                    var updatedDriverState = driver.setDrivers(driverState, updatedDriverList).setIn([key, '__driver'], driver);
+                    return state.setIn(path, updatedDriverState);
                 }
-                throw path.slice[0, -1] + " is not a composite driver";
+                throw path + " is not a composite driver";
             case exports.__resetState__:
                 return INITIAL_STATE;
             default:
