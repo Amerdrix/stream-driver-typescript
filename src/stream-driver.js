@@ -15,12 +15,26 @@ var Intent = (function () {
     return Intent;
 }());
 exports.Intent = Intent;
+var intentBuffer = new Array();
+var publishingIntent = false;
+function publishIntent(intent) {
+    intentBuffer.push(intent);
+    if (publishingIntent) {
+        return;
+    }
+    publishingIntent = true;
+    var bufferedIntent;
+    while (bufferedIntent = intentBuffer.shift()) {
+        intent$.onNext(bufferedIntent);
+    }
+    publishingIntent = false;
+}
 function createIntent(name) {
-    var intent = function (data) {
-        var record = new Intent(name, intent, data);
-        intent$.onNext((record));
+    var intentFactory = function (data) {
+        var intent = new Intent(name, intentFactory, data);
+        publishIntent(intent);
     };
-    return intent;
+    return intentFactory;
 }
 exports.createIntent = createIntent;
 var _CompositeDriver = (function () {

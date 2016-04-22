@@ -19,17 +19,34 @@ export interface IDriver{
   apply(state: State, intent: Intent): State
 }
 
-export function createIntent<T>(name: string){
+const intentBuffer = new Array<Intent>()
+var publishingIntent = false
+function publishIntent(intent: Intent){
+  intentBuffer.push(intent)
 
-  var intent = (data?: T) => {
-
-    // this is a bit funky, we assign the factory function as ithe ID of the
-    // intent
-    var record = new Intent(name, intent, data)
-    intent$.onNext(<Intent>(record))
+  if (publishingIntent){
+    return;
   }
 
-  return intent;
+  publishingIntent = true
+
+  var bufferedIntent: Intent
+  while(bufferedIntent = intentBuffer.shift()){
+    intent$.onNext(bufferedIntent)
+  }
+
+  publishingIntent = false
+}
+
+export function createIntent<T>(name: string){
+  var intentFactory = (data?: T) => {
+    // this is a bit funky, we assign the factory function as ithe ID of the
+    // intent
+    const intent = new Intent(name, intentFactory, data)
+    publishIntent(intent)
+  }
+
+  return intentFactory;
 }
 
 class _CompositeDriver implements IDriver{
@@ -94,7 +111,7 @@ class RootDriver extends _CompositeDriver {
         if(driver instanceof _CompositeDriver){
           const updatedDriverList = driver.getChildDrivers(driverState).push({key: key, driver: data.driver})
 
-          const updatedDriverState = driver.setDrivers(driverState, updatedDriverList).setIn([key,'__driver'], driver);
+          const updatedDriverState = driver.setDrivers(driverState, updatedDriverList).setIn([key, '__driver'], driver);
           return state.setIn(path, updatedDriverState)
         }
 
