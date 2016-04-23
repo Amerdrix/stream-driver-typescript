@@ -54,7 +54,7 @@ describe("StreamDriver", () => {
     var driverApplyCalled = false
     var testDriver = (s) => { driverApplyCalled = true;  return s}
 
-    StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.CompositeDriver})
+    StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.DynamicCompositeDriver})
     StreamDriver.attachDriver({path: "Parent.tests", driver: testDriver})
 
     testIntent()
@@ -66,8 +66,8 @@ describe("StreamDriver", () => {
     var driverApplyCalled = false
     var testDriver = (s) => { driverApplyCalled = true;  return s}
 
-    StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.CompositeDriver})
-    StreamDriver.attachDriver({path: "Parent.child", driver: StreamDriver.CompositeDriver})
+    StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.DynamicCompositeDriver})
+    StreamDriver.attachDriver({path: "Parent.child", driver: StreamDriver.DynamicCompositeDriver})
     StreamDriver.attachDriver({path: "Parent.child.tests", driver: testDriver})
 
     testIntent()
@@ -78,24 +78,24 @@ describe("StreamDriver", () => {
   it("handles intents published within a driver", (done) => {
     var secondIntentCalled = false
     var secondIntent = StreamDriver.createIntent<any>("second intent")
-    var testDriver = (state, intent) => {
+    var testDriver = (state = Immutable.Map<string, any>(), intent) => {
       switch(intent.tag){
         case secondIntent:
           return state.set('secondIntentResult', 'second')
         case testIntent:
-          secondIntent({})
+          secondIntent()
           return state.set('firstIntentResult', 'first')
       }
       return state;
     }
 
-    StreamDriver.attachDriver({path: "tests", driver: testDriver})
+    StreamDriver.attachDriver({path: "test", driver: testDriver})
 
     testIntent()
 
     state$.subscribe(state => {
-      expect(state.getIn(['tests','firstIntentResult'])).to.be.eq('first')
-      expect(state.getIn(['tests','secondIntentResult'])).to.be.eq('second')
+      expect(state.getIn(['test','firstIntentResult'])).to.be.eq('first')
+      expect(state.getIn(['test','secondIntentResult'])).to.be.eq('second')
       done()
     })
   })

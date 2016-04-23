@@ -41,7 +41,7 @@ describe("StreamDriver", function () {
     it("can nest composite drivers", function () {
         var driverApplyCalled = false;
         var testDriver = function (s) { driverApplyCalled = true; return s; };
-        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.CompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.DynamicCompositeDriver });
         StreamDriver.attachDriver({ path: "Parent.tests", driver: testDriver });
         testIntent();
         chai_1.expect(driverApplyCalled).to.be.true;
@@ -49,8 +49,8 @@ describe("StreamDriver", function () {
     it("can nest to multiple levels composite drivers", function () {
         var driverApplyCalled = false;
         var testDriver = function (s) { driverApplyCalled = true; return s; };
-        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.CompositeDriver });
-        StreamDriver.attachDriver({ path: "Parent.child", driver: StreamDriver.CompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.DynamicCompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent.child", driver: StreamDriver.DynamicCompositeDriver });
         StreamDriver.attachDriver({ path: "Parent.child.tests", driver: testDriver });
         testIntent();
         chai_1.expect(driverApplyCalled).to.be.true;
@@ -59,20 +59,21 @@ describe("StreamDriver", function () {
         var secondIntentCalled = false;
         var secondIntent = StreamDriver.createIntent("second intent");
         var testDriver = function (state, intent) {
+            if (state === void 0) { state = Immutable.Map(); }
             switch (intent.tag) {
                 case secondIntent:
                     return state.set('secondIntentResult', 'second');
                 case testIntent:
-                    secondIntent({});
+                    secondIntent();
                     return state.set('firstIntentResult', 'first');
             }
             return state;
         };
-        StreamDriver.attachDriver({ path: "tests", driver: testDriver });
+        StreamDriver.attachDriver({ path: "test", driver: testDriver });
         testIntent();
         state$.subscribe(function (state) {
-            chai_1.expect(state.getIn(['tests', 'firstIntentResult'])).to.be.eq('first');
-            chai_1.expect(state.getIn(['tests', 'secondIntentResult'])).to.be.eq('second');
+            chai_1.expect(state.getIn(['test', 'firstIntentResult'])).to.be.eq('first');
+            chai_1.expect(state.getIn(['test', 'secondIntentResult'])).to.be.eq('second');
             done();
         });
     });
