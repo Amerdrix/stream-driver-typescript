@@ -3,11 +3,11 @@ var Immutable = require('immutable');
 var StreamDriver = require('./stream-driver');
 var chai_1 = require('chai');
 var testIntent = StreamDriver.createIntent('test');
-describe("Attach", function () {
+describe("StreamDriver", function () {
     var state$ = null;
     beforeEach(function () {
         StreamDriver.__resetState__();
-        state$ = StreamDriver.state$.takeUntilWithTime(15);
+        state$ = StreamDriver.state$.takeUntilWithTime(15).last();
     });
     it("Calls attached drivers", function () {
         var driverApplyCalled = false;
@@ -18,7 +18,10 @@ describe("Attach", function () {
     });
     it("provides the intent to 'apply'", function () {
         var intentMatch = false;
-        var driver = function (s, i) { intentMatch = i.key === testIntent; return s; };
+        var driver = function (state, intent) {
+            intentMatch = intent.tag === testIntent;
+            return state;
+        };
         StreamDriver.attachDriver({ path: "tests", driver: driver });
         testIntent();
         chai_1.expect(intentMatch).to.be.true;
@@ -30,7 +33,7 @@ describe("Attach", function () {
         };
         StreamDriver.attachDriver({ path: "tests", driver: driver });
         testIntent();
-        state$.last().subscribe(function (state) {
+        state$.subscribe(function (state) {
             chai_1.expect(state.getIn(['tests', 'StateUpdated'])).to.be.true;
             done();
         });
@@ -56,7 +59,7 @@ describe("Attach", function () {
         var secondIntentCalled = false;
         var secondIntent = StreamDriver.createIntent("second intent");
         var testDriver = function (state, intent) {
-            switch (intent.key) {
+            switch (intent.tag) {
                 case secondIntent:
                     return state.set('secondIntentResult', 'second');
                 case testIntent:
@@ -67,7 +70,7 @@ describe("Attach", function () {
         };
         StreamDriver.attachDriver({ path: "tests", driver: testDriver });
         testIntent();
-        state$.last().subscribe(function (state) {
+        state$.subscribe(function (state) {
             chai_1.expect(state.getIn(['tests', 'firstIntentResult'])).to.be.eq('first');
             chai_1.expect(state.getIn(['tests', 'secondIntentResult'])).to.be.eq('second');
             done();

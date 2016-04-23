@@ -3,14 +3,18 @@ import * as Immutable from 'immutable'
 
 export type State = Immutable.Map<string, any>;
 
-export class Intent{
-  constructor(name: string, key: any, data: any){
-    this.key = key
-    this.name = name
-    this.data = data
-  }
+interface AttachDriverData {
+  path: string
+  driver: Driver
+}
 
-  key: any
+interface DriverMapping {
+  key: string
+  driver: Driver
+}
+
+export interface Intent{
+  tag: any
   data: any
   name: string
 }
@@ -19,30 +23,36 @@ export interface Driver{
   (state: State, intent: Intent): State;
 }
 
-const intentBuffer = new Array<Intent>()
-var publishingIntent = false
-function publishIntent(intent: Intent){
-  intentBuffer.push(intent)
+const publishIntent = (() =>  {
+  const intentBuffer = new Array<Intent>()
+  var publishingIntent = false
+  return (intent: Intent) => {
+    intentBuffer.push(intent)
 
-  if (publishingIntent){
-    return;
+    if (publishingIntent){
+      return;
+    }
+
+    publishingIntent = true
+
+    var bufferedIntent: Intent
+    while(bufferedIntent = intentBuffer.shift()){
+      INTENT$.onNext(bufferedIntent)
+    }
+
+    publishingIntent = false
   }
-
-  publishingIntent = true
-
-  var bufferedIntent: Intent
-  while(bufferedIntent = intentBuffer.shift()){
-    intent$.onNext(bufferedIntent)
-  }
-
-  publishingIntent = false
-}
+})()
 
 export function createIntent<T>(name: string){
   var intentFactory = (data?: T) => {
     // this is a bit funky, we assign the factory function as ithe ID of the
     // intent
-    const intent = new Intent(name, intentFactory, data)
+    const intent = {
+      tag: intentFactory,
+      name,
+      data
+    }
     publishIntent(intent)
   }
 
@@ -54,7 +64,7 @@ function getOrDefault<T>(key: string, state: State, otherwise: T):T {
 }
 
 function getCompositeDrivers(state: State){
-  return getOrDefault<Immutable.List<IDriverMap>>('__drivers', state, Immutable.List<IDriverMap>())
+  return getOrDefault<Immutable.List<DriverMapping>>('__drivers', state, Immutable.List<DriverMapping>())
 }
 
 export const CompositeDriver: Driver = function(state: State, intent: Intent) {
@@ -66,50 +76,41 @@ export const CompositeDriver: Driver = function(state: State, intent: Intent) {
   }, state);
 }
 
+function RootDriver (state: State, intent: Intent){
+  switch(intent.tag)
+  {
+    case attachDriver:
 
-class IDriverMap {
-  key: string
-  driver: Driver
-}
+      const data = <AttachDriverData>intent.data
+      const fullPath = data.path.split('.')
+      const path = fullPath.slice(0, -1)
+      const key = fullPath[fullPath.length - 1]
 
-class AttachDriverData {
-  path: string
-  driver: Driver
-}
+      const driverState = state.getIn(path)
+      const driver = driverState.get('__driver')
 
-const RootDriver : Driver = function(state: State, intent: Intent){
+      if(driver === CompositeDriver || driver === RootDriver){
+        const updatedDriverList = getCompositeDrivers(driverState).push({key, driver: data.driver})
+        const updatedDriverState = driverState.set('__drivers', updatedDriverList).setIn([key, '__driver'], data.driver);
+        return state.setIn(path, updatedDriverState)
+      }
+      throw `cannot add driver to ${path.join('.')} as it is not a composite driver`
 
-  if(intent.key === attachDriver){
+    case __resetState__:
+      return INITIAL_STATE;
 
-    const data = <AttachDriverData>intent.data
-    const fullPath = data.path.split('.')
-    const path = fullPath.slice(0, -1)
-    const key = fullPath[fullPath.length - 1]
-
-    const driverState = state.getIn(path)
-    const driver = driverState.get('__driver')
-
-    if(driver === CompositeDriver || driver === RootDriver){
-      const updatedDriverList = getCompositeDrivers(driverState).push({key: key, driver: data.driver})
-      const updatedDriverState = driverState.set('__drivers', updatedDriverList).setIn([key, '__driver'], driver);
-      return state.setIn(path, updatedDriverState)
-    }
-
+    default:
+      return CompositeDriver(state, intent)
   }
-
-  if(intent.key === __resetState__) {
-    return INITIAL_STATE;
-  }
-
-  return CompositeDriver(state, intent)
 }
 
+const INITIAL_STATE = Immutable.Map<string, any>({'__driver': RootDriver})
+const INTENT$ = new Rx.Subject<Intent>()
 
 export const attachDriver = createIntent<AttachDriverData>('ATTACH DRIVER')
 export const  __resetState__ = createIntent('RESET STATE')
 
-//export const CompositeDriver = new _CompositeDriver()
-const INITIAL_STATE = Immutable.Map<string, any>({'__driver': RootDriver})
-const intent$ = new Rx.Subject<Intent>()
-export const state$ = intent$.scan(RootDriver, INITIAL_STATE).replay(1)
+
+// casting to any is a bit of a hack, but it seems the typescript definition is missing
+export const state$ = (<any>INTENT$.scan(RootDriver, INITIAL_STATE)).replay(1)
 state$.connect()

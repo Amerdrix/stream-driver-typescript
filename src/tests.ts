@@ -4,11 +4,11 @@ import * as StreamDriver from './stream-driver'
 import {expect} from 'chai'
 const testIntent = StreamDriver.createIntent('test');
 
-describe("Attach", () => {
+describe("StreamDriver", () => {
   var state$: Rx.Observable<StreamDriver.State> = null
   beforeEach(() => {
     StreamDriver.__resetState__();
-    state$ = StreamDriver.state$.takeUntilWithTime(15); // Some tests require async calls - so this is a tuning problem
+    state$ = StreamDriver.state$.takeUntilWithTime(15).last(); // Some tests require async calls - so this is a tuning problem
   })
 
   it("Calls attached drivers", () => {
@@ -24,7 +24,10 @@ describe("Attach", () => {
 
   it("provides the intent to 'apply'", () => {
     var intentMatch = false
-    var driver = (s, i) => { intentMatch = i.key === testIntent;  return s}
+    var driver = (state, intent) => {
+        intentMatch = intent.tag === testIntent;
+        return state
+      }
 
     StreamDriver.attachDriver({path: "tests", driver: driver})
     testIntent()
@@ -41,7 +44,7 @@ describe("Attach", () => {
     StreamDriver.attachDriver({path: "tests", driver: driver})
     testIntent()
 
-    state$.last().subscribe(state => {
+    state$.subscribe(state => {
       expect(state.getIn(['tests','StateUpdated'])).to.be.true
       done()
     })
@@ -76,7 +79,7 @@ describe("Attach", () => {
     var secondIntentCalled = false
     var secondIntent = StreamDriver.createIntent<any>("second intent")
     var testDriver = (state, intent) => {
-      switch(intent.key){
+      switch(intent.tag){
         case secondIntent:
           return state.set('secondIntentResult', 'second')
         case testIntent:
@@ -90,7 +93,7 @@ describe("Attach", () => {
 
     testIntent()
 
-    state$.last().subscribe(state => {
+    state$.subscribe(state => {
       expect(state.getIn(['tests','firstIntentResult'])).to.be.eq('first')
       expect(state.getIn(['tests','secondIntentResult'])).to.be.eq('second')
       done()

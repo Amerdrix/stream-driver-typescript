@@ -1,32 +1,29 @@
 "use strict";
 var Rx = require('rx');
 var Immutable = require('immutable');
-var Intent = (function () {
-    function Intent(name, key, data) {
-        this.key = key;
-        this.name = name;
-        this.data = data;
-    }
-    return Intent;
-}());
-exports.Intent = Intent;
-var intentBuffer = new Array();
-var publishingIntent = false;
-function publishIntent(intent) {
-    intentBuffer.push(intent);
-    if (publishingIntent) {
-        return;
-    }
-    publishingIntent = true;
-    var bufferedIntent;
-    while (bufferedIntent = intentBuffer.shift()) {
-        intent$.onNext(bufferedIntent);
-    }
-    publishingIntent = false;
-}
+var publishIntent = (function () {
+    var intentBuffer = new Array();
+    var publishingIntent = false;
+    return function (intent) {
+        intentBuffer.push(intent);
+        if (publishingIntent) {
+            return;
+        }
+        publishingIntent = true;
+        var bufferedIntent;
+        while (bufferedIntent = intentBuffer.shift()) {
+            INTENT$.onNext(bufferedIntent);
+        }
+        publishingIntent = false;
+    };
+})();
 function createIntent(name) {
     var intentFactory = function (data) {
-        var intent = new Intent(name, intentFactory, data);
+        var intent = {
+            tag: intentFactory,
+            name: name,
+            data: data
+        };
         publishIntent(intent);
     };
     return intentFactory;
@@ -46,38 +43,30 @@ exports.CompositeDriver = function (state, intent) {
         return state.set(map.key, newState);
     }, state);
 };
-var IDriverMap = (function () {
-    function IDriverMap() {
+function RootDriver(state, intent) {
+    switch (intent.tag) {
+        case exports.attachDriver:
+            var data = intent.data;
+            var fullPath = data.path.split('.');
+            var path = fullPath.slice(0, -1);
+            var key = fullPath[fullPath.length - 1];
+            var driverState = state.getIn(path);
+            var driver = driverState.get('__driver');
+            if (driver === exports.CompositeDriver || driver === RootDriver) {
+                var updatedDriverList = getCompositeDrivers(driverState).push({ key: key, driver: data.driver });
+                var updatedDriverState = driverState.set('__drivers', updatedDriverList).setIn([key, '__driver'], data.driver);
+                return state.setIn(path, updatedDriverState);
+            }
+            throw "cannot add driver to " + path.join('.') + " as it is not a composite driver";
+        case exports.__resetState__:
+            return INITIAL_STATE;
+        default:
+            return exports.CompositeDriver(state, intent);
     }
-    return IDriverMap;
-}());
-var AttachDriverData = (function () {
-    function AttachDriverData() {
-    }
-    return AttachDriverData;
-}());
-var RootDriver = function (state, intent) {
-    if (intent.key === exports.attachDriver) {
-        var data = intent.data;
-        var fullPath = data.path.split('.');
-        var path = fullPath.slice(0, -1);
-        var key = fullPath[fullPath.length - 1];
-        var driverState = state.getIn(path);
-        var driver = driverState.get('__driver');
-        if (driver === exports.CompositeDriver || driver === RootDriver) {
-            var updatedDriverList = getCompositeDrivers(driverState).push({ key: key, driver: data.driver });
-            var updatedDriverState = driverState.set('__drivers', updatedDriverList).setIn([key, '__driver'], driver);
-            return state.setIn(path, updatedDriverState);
-        }
-    }
-    if (intent.key === exports.__resetState__) {
-        return INITIAL_STATE;
-    }
-    return exports.CompositeDriver(state, intent);
-};
+}
+var INITIAL_STATE = Immutable.Map({ '__driver': RootDriver });
+var INTENT$ = new Rx.Subject();
 exports.attachDriver = createIntent('ATTACH DRIVER');
 exports.__resetState__ = createIntent('RESET STATE');
-var INITIAL_STATE = Immutable.Map({ '__driver': RootDriver });
-var intent$ = new Rx.Subject();
-exports.state$ = intent$.scan(RootDriver, INITIAL_STATE).replay(1);
+exports.state$ = INTENT$.scan(RootDriver, INITIAL_STATE).replay(1);
 exports.state$.connect();

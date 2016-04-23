@@ -5,12 +5,8 @@ var mocha = require('gulp-mocha')
 var tsproject = typescript.createProject('./tsconfig.json')
 
 gulp.task('default', function(){
-
-  gulp.src('./src/*.ts')
+  tsproject.src()
   .pipe(typescript(tsproject))
   .pipe(gulp.dest('./bin'))
   .pipe(mocha())
-
-
-
 })
