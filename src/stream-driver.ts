@@ -13,6 +13,11 @@ export interface Driver<T>{
   (state: T, intent: Intent): T;
 }
 
+export interface AttachDriverData {
+  path: string
+  driver: Driver<any>
+}
+
 export function createIntent<T>(name: string){
   var intentFactory = (data?: T) => {
     // this is a bit funky, we assign the factory function as ithe ID of the
@@ -61,11 +66,6 @@ export const state$ = (<any>INTENT$.scan(RootDriver, INITIAL_STATE)).replay(1)
 state$.connect()
 
 // --------------- Private ---------------------
-
-interface AttachDriverData {
-  path: string
-  driver: Driver<any>
-}
 
 function getOrDefault<T>(key: string, state: State, otherwise: T):T {
   return state.get(key) || otherwise

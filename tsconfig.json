@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
+    "declaration": true,
     "target": "es5",
-    "module": "commonjs"
+    "module": "umd",
+    "sourceMap": true,
+    "outDir": "dist"
   },
   "files": [
     "./src/stream-driver.ts"
