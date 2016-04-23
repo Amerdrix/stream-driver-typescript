@@ -4,15 +4,6 @@ import * as StreamDriver from './stream-driver'
 import {expect} from 'chai'
 const testIntent = StreamDriver.createIntent('test');
 
-class TestDriver implements StreamDriver.IDriver{
-  constructor(apply: (state: StreamDriver.State, intent: StreamDriver.Intent) => StreamDriver.State) {
-
-    this.apply = apply
-  }
-
-  apply: (state: StreamDriver.State, intent: StreamDriver.Intent) => StreamDriver.State
-}
-
 describe("Attach", () => {
   var state$: Rx.Observable<StreamDriver.State> = null
   beforeEach(() => {
@@ -22,7 +13,7 @@ describe("Attach", () => {
 
   it("Calls attached drivers", () => {
     var driverApplyCalled = false
-    var driver = new TestDriver((s) => { driverApplyCalled = true;  return s} )
+    var driver = (s) => { driverApplyCalled = true;  return s}
 
     StreamDriver.attachDriver({path: "tests", driver: driver})
     testIntent()
@@ -33,7 +24,7 @@ describe("Attach", () => {
 
   it("provides the intent to 'apply'", () => {
     var intentMatch = false
-    var driver = new TestDriver((s, i) => { intentMatch = i.key === testIntent;  return s} )
+    var driver = (s, i) => { intentMatch = i.key === testIntent;  return s}
 
     StreamDriver.attachDriver({path: "tests", driver: driver})
     testIntent()
@@ -42,10 +33,10 @@ describe("Attach", () => {
   })
 
   it("updates state as per the returned state ", (done) => {
-    var driver = new TestDriver(state => {
+    var driver = (state) => {
         state = state || Immutable.Map<string, any>()
         return state.set('StateUpdated', true)
-    } )
+    }
 
     StreamDriver.attachDriver({path: "tests", driver: driver})
     testIntent()
@@ -58,7 +49,7 @@ describe("Attach", () => {
 
   it("can nest composite drivers", () => {
     var driverApplyCalled = false
-    var testDriver = new TestDriver((s) => { driverApplyCalled = true;  return s} )
+    var testDriver = (s) => { driverApplyCalled = true;  return s}
 
     StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.CompositeDriver})
     StreamDriver.attachDriver({path: "Parent.tests", driver: testDriver})
@@ -70,7 +61,7 @@ describe("Attach", () => {
 
   it("can nest to multiple levels composite drivers", () => {
     var driverApplyCalled = false
-    var testDriver = new TestDriver((s) => { driverApplyCalled = true;  return s} )
+    var testDriver = (s) => { driverApplyCalled = true;  return s}
 
     StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.CompositeDriver})
     StreamDriver.attachDriver({path: "Parent.child", driver: StreamDriver.CompositeDriver})
@@ -84,7 +75,7 @@ describe("Attach", () => {
   it("handles intents published within a driver", (done) => {
     var secondIntentCalled = false
     var secondIntent = StreamDriver.createIntent<any>("second intent")
-    var testDriver = new TestDriver((state, intent) => {
+    var testDriver = (state, intent) => {
       switch(intent.key){
         case secondIntent:
           return state.set('secondIntentResult', 'second')
@@ -93,9 +84,8 @@ describe("Attach", () => {
           return state.set('firstIntentResult', 'first')
       }
       return state;
-
     }
-   )
+
     StreamDriver.attachDriver({path: "tests", driver: testDriver})
 
     testIntent()
