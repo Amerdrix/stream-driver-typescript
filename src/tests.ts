@@ -4,11 +4,15 @@ import * as StreamDriver from './stream-driver'
 import {expect} from 'chai'
 const testIntent = StreamDriver.createIntent('test');
 
+function getLastInStream (stream){
+  return stream.takeUntilWithTime(0).last();
+}
+
 describe("StreamDriver", () => {
   var state$: Rx.Observable<StreamDriver.State> = null
   beforeEach(() => {
     StreamDriver.__resetState__();
-    state$ = StreamDriver.state$.takeUntilWithTime(15).last(); // Some tests require async calls - so this is a tuning problem
+    state$ = getLastInStream(StreamDriver.state$)
   })
 
   it("Calls attached drivers", () => {
@@ -96,6 +100,30 @@ describe("StreamDriver", () => {
     state$.subscribe(state => {
       expect(state.getIn(['test','firstIntentResult'])).to.be.eq('first')
       expect(state.getIn(['test','secondIntentResult'])).to.be.eq('second')
+      done()
+    })
+  })
+
+  it("returns a stream of states within a nested driver", (done) => {
+
+    var testDriver = (state = false, intent) => {
+      switch(intent.tag){
+        case testIntent:
+          return true
+      }
+      return state;
+    }
+
+    StreamDriver.attachDriver({path: "Parent", driver: StreamDriver.DynamicCompositeDriver})
+    StreamDriver.attachDriver({path: "Parent.child", driver: StreamDriver.DynamicCompositeDriver})
+    const testState$ = StreamDriver.attachDriver({path: "Parent.child.tests", driver: testDriver})
+
+
+
+    testIntent()
+
+    getLastInStream(testState$).subscribe(state => {
+      expect(state).to.be.true
       done()
     })
   })

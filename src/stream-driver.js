@@ -23,7 +23,15 @@ exports.DynamicCompositeDriver = function (state, intent) {
 };
 var INITIAL_STATE = Immutable.Map({ '__drivers': Immutable.Map() });
 var INTENT$ = new Rx.Subject();
-exports.attachDriver = createIntent('ATTACH DRIVER');
+var _attachDriver = createIntent('ATTACH DRIVER');
+exports.attachDriver = function (data) {
+    _attachDriver(data);
+    var _a = splitPath(data.path), path = _a[0], key = _a[1];
+    return exports.state$
+        .select(function (root) { return root.getIn(path); })
+        .where(function (parentNode) { return parentNode && parentNode.has(key); })
+        .select(function (parentNode) { return parentNode.get(key); });
+};
 exports.__resetState__ = createIntent('RESET STATE');
 exports.state$ = INTENT$.scan(RootDriver, INITIAL_STATE).replay(1);
 exports.state$.connect();
@@ -32,6 +40,12 @@ function getOrDefault(key, state, otherwise) {
 }
 function getDynamicCompositeDrivers(state) {
     return getOrDefault('__drivers', state, Immutable.Map());
+}
+function splitPath(inputPath) {
+    var fullPath = inputPath.split('.');
+    var path = fullPath.slice(0, -1);
+    var key = fullPath[fullPath.length - 1];
+    return [path, key];
 }
 var publishIntent = (function () {
     var intentBuffer = new Array();
@@ -51,11 +65,9 @@ var publishIntent = (function () {
 })();
 function RootDriver(state, intent) {
     switch (intent.tag) {
-        case exports.attachDriver:
+        case _attachDriver:
             var data = intent.data;
-            var fullPath = data.path.split('.');
-            var path = fullPath.slice(0, -1);
-            var key = fullPath[fullPath.length - 1];
+            var _a = splitPath(intent.data.path), path = _a[0], key = _a[1];
             var pathState = state.getIn(path);
             var driverList = getDynamicCompositeDrivers(pathState);
             if (driverList) {

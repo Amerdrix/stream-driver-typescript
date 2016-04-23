@@ -3,11 +3,14 @@ var Immutable = require('immutable');
 var StreamDriver = require('./stream-driver');
 var chai_1 = require('chai');
 var testIntent = StreamDriver.createIntent('test');
+function getLastInStream(stream) {
+    return stream.takeUntilWithTime(0).last();
+}
 describe("StreamDriver", function () {
     var state$ = null;
     beforeEach(function () {
         StreamDriver.__resetState__();
-        state$ = StreamDriver.state$.takeUntilWithTime(15).last();
+        state$ = getLastInStream(StreamDriver.state$);
     });
     it("Calls attached drivers", function () {
         var driverApplyCalled = false;
@@ -74,6 +77,24 @@ describe("StreamDriver", function () {
         state$.subscribe(function (state) {
             chai_1.expect(state.getIn(['test', 'firstIntentResult'])).to.be.eq('first');
             chai_1.expect(state.getIn(['test', 'secondIntentResult'])).to.be.eq('second');
+            done();
+        });
+    });
+    it("returns a stream of states within a nested driver", function (done) {
+        var testDriver = function (state, intent) {
+            if (state === void 0) { state = false; }
+            switch (intent.tag) {
+                case testIntent:
+                    return true;
+            }
+            return state;
+        };
+        StreamDriver.attachDriver({ path: "Parent", driver: StreamDriver.DynamicCompositeDriver });
+        StreamDriver.attachDriver({ path: "Parent.child", driver: StreamDriver.DynamicCompositeDriver });
+        var testState$ = StreamDriver.attachDriver({ path: "Parent.child.tests", driver: testDriver });
+        testIntent();
+        getLastInStream(testState$).subscribe(function (state) {
+            chai_1.expect(state).to.be.true;
             done();
         });
     });

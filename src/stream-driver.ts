@@ -9,8 +9,8 @@ export interface Intent{
   name: string
 }
 
-export interface Driver{
-  (state: State, intent: Intent): State;
+export interface Driver<T>{
+  (state: T, intent: Intent): T;
 }
 
 export function createIntent<T>(name: string){
@@ -28,7 +28,7 @@ export function createIntent<T>(name: string){
   return intentFactory;
 }
 
-export const DynamicCompositeDriver: Driver = function(state: State, intent: Intent) {
+export const DynamicCompositeDriver: Driver<State> = function(state: State, intent: Intent) {
   const drivers = getDynamicCompositeDrivers(state)
 
   return drivers.reduce((state, driver, key) => {
@@ -38,10 +38,22 @@ export const DynamicCompositeDriver: Driver = function(state: State, intent: Int
   }, state);
 }
 
-const INITIAL_STATE = Immutable.Map<string, any>({'__drivers': Immutable.Map<string, Driver>()})
+const INITIAL_STATE = Immutable.Map<string, any>({'__drivers': Immutable.Map<string, Driver<State>>()})
 const INTENT$ = new Rx.Subject<Intent>()
 
-export const attachDriver = createIntent<AttachDriverData>('ATTACH DRIVER')
+
+const _attachDriver = createIntent<AttachDriverData>('ATTACH DRIVER')
+export const attachDriver = (data: AttachDriverData) => {
+  _attachDriver(data)
+
+  const [path, key] = splitPath(data.path)
+
+  return state$
+    .select(root => root.getIn(path))
+    .where(parentNode => parentNode && parentNode.has(key))
+    .select(parentNode => parentNode.get(key))
+}
+
 export const  __resetState__ = createIntent('RESET STATE')
 
 // casting to any is a bit of a hack, but it seems the typescript definition is missing
@@ -52,7 +64,7 @@ state$.connect()
 
 interface AttachDriverData {
   path: string
-  driver: Driver
+  driver: Driver<any>
 }
 
 function getOrDefault<T>(key: string, state: State, otherwise: T):T {
@@ -60,7 +72,15 @@ function getOrDefault<T>(key: string, state: State, otherwise: T):T {
 }
 
 function getDynamicCompositeDrivers(state: State){
-  return getOrDefault<Immutable.Map<string, Driver>>('__drivers', state, Immutable.Map<string, Driver>())
+  return getOrDefault<Immutable.Map<string, Driver<State>>>('__drivers', state, Immutable.Map<string, Driver<State>>())
+}
+
+function splitPath(inputPath: string):[Array<string>, string]{
+  const fullPath = inputPath.split('.')
+  const path = fullPath.slice(0, -1)
+  const key = fullPath[fullPath.length - 1]
+
+  return [path, key]
 }
 
 const publishIntent = (() =>  {
@@ -87,12 +107,9 @@ const publishIntent = (() =>  {
 function RootDriver (state: State, intent: Intent){
   switch(intent.tag)
   {
-    case attachDriver:
-
+    case _attachDriver:
       const data = <AttachDriverData>intent.data
-      const fullPath = data.path.split('.')
-      const path = fullPath.slice(0, -1)
-      const key = fullPath[fullPath.length - 1]
+      const [path, key] = splitPath(intent.data.path)
 
       const pathState = state.getIn(path)
       const driverList = getDynamicCompositeDrivers(pathState)
@@ -101,7 +118,7 @@ function RootDriver (state: State, intent: Intent){
         var updatePathState = pathState.set('__drivers',  driverList.set(key, data.driver))
 
         if(data.driver === DynamicCompositeDriver){
-          updatePathState = updatePathState.setIn([key, '__drivers'], Immutable.Map<string, Driver>());
+          updatePathState = updatePathState.setIn([key, '__drivers'], Immutable.Map<string, Driver<State>>());
         }
 
         return state.setIn(path, updatePathState)
